@@ -1,6 +1,6 @@
 @{
     RootModule           = 'SwyxAutoSsl.psm1'
-    ModuleVersion        = '0.1.1'
+    ModuleVersion        = '0.2.0'
     GUID                 = '3f0c8d0e-6a3e-4c1b-9d52-7b1e2f4a9c61'
     Author               = 'FluxVision'
     CompanyName          = 'FluxVision (https://fluxvision.co.uk)'

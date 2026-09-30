@@ -31,6 +31,7 @@ function Get-SwyxAutoSslStatus {
         LastResult             = $state.LastResult
         LastError              = $state.LastError
         ScheduledTask          = $(if ($task) { [string]$task.State } else { 'Not registered' })
+        TaskRunsAs             = $(if ($task) { $task.Principal.UserId })
         TaskLastResult         = $(if ($taskInfo) { '0x{0:X}' -f $taskInfo.LastTaskResult })
         TaskNextRun            = $(if ($taskInfo) { $taskInfo.NextRunTime })
         DataDirectory          = Get-DataRoot

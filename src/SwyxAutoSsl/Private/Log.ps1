@@ -4,6 +4,7 @@
 #   1002  Certificate obtained but not installed (staging or -SkipScstInstall)
 #   1100  Run failed
 #   1200  Cloudflare API token changed
+#   1300  SwyxWare administrator rights granted to or removed from SYSTEM
 
 function Write-RunLog {
     param(

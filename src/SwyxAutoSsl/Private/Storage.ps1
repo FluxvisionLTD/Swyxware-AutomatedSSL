@@ -35,6 +35,13 @@ function Get-Config {
     Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
 }
 
+function Get-ConfigValue {
+    # Settings added in later versions are missing from older config.json files.
+    param($Config, [Parameter(Mandatory)][string]$Name, $Default = $null)
+    if ($Config -and $Config.PSObject.Properties[$Name] -and $null -ne $Config.$Name) { return $Config.$Name }
+    $Default
+}
+
 function Save-Config {
     param([Parameter(Mandatory)]$Config)
     $Config | ConvertTo-Json | Set-Content -LiteralPath (Get-DataPath Config) -Encoding UTF8

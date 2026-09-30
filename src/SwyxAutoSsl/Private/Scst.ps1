@@ -92,9 +92,20 @@ function ConvertFrom-ScstCertificateOutput {
     }
 }
 
+function Assert-ScstRight {
+    # Scst.Cli.exe refuses to work unless the calling account is a Windows and SwyxWare administrator.
+    param([Parameter(Mandatory)]$Result)
+    if ("$($Result.Output) $($Result.Error)" -match 'administrator rights are required') {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        throw ("Scst.Cli.exe refused '{0}': it needs Windows and SwyxWare administrator rights. Re-run Install-SwyxAutoSsl " +
+            'to register SYSTEM as a SwyxWare administrator, or install with -TaskCredential for an account that is one.') -f $identity
+    }
+}
+
 function Get-ScstConfiguration {
     param([Parameter(Mandatory)][string]$CliPath)
     $result = Invoke-ScstCli -Path $CliPath -Arguments 'show', 'configuration', '--noTraceFile' -TimeoutSeconds 120
+    Assert-ScstRight -Result $result
     if ($result.ExitCode -ne 0) { throw "Scst.Cli.exe show configuration failed ($($result.ExitCode)): $($result.Output) $($result.Error)" }
     ConvertFrom-ScstConfigurationOutput -Text $result.Output
 }
@@ -102,6 +113,7 @@ function Get-ScstConfiguration {
 function Get-ScstCertificate {
     param([Parameter(Mandatory)][string]$CliPath)
     $result = Invoke-ScstCli -Path $CliPath -Arguments 'show', 'certificate', '--noTraceFile' -TimeoutSeconds 120
+    Assert-ScstRight -Result $result
     if ($result.ExitCode -ne 0) { throw "Scst.Cli.exe show certificate failed ($($result.ExitCode)): $($result.Output) $($result.Error)" }
     ConvertFrom-ScstCertificateOutput -Text $result.Output
 }
@@ -162,6 +174,7 @@ function Install-ScstCertificate {
     foreach ($line in ($result.Output + "`n" + $result.Error) -split '\r?\n') {
         if ($line.Trim()) { Write-RunLog "Scst.Cli: $line" }
     }
+    Assert-ScstRight -Result $result
     if ($result.ExitCode -ne 0) {
         throw "Scst.Cli.exe $($cliArgs[0]) $($cliArgs[1]) failed with exit code $($result.ExitCode). SCST traces: $env:ProgramData\Swyx\Traces"
     }

@@ -15,6 +15,9 @@ BeforeAll {
         [CmdletBinding()]
         param($MainDomain, $PluginArgs, [switch]$Force)
     }
+    # Stand-ins for the SwyxWare IpPbx module.
+    function global:Connect-IpPbx { }
+    function global:Disconnect-IpPbx { }
 
     function Invoke-InModule {
         # Runs a script block inside the module scope, passing arguments positionally.
@@ -61,9 +64,10 @@ BeforeAll {
 
 AfterAll {
     Remove-Module SwyxAutoSsl -Force -ErrorAction SilentlyContinue
-    foreach ($name in 'Get-PAOrder', 'Get-PACertificate', 'New-PACertificate', 'Submit-Renewal') {
+    foreach ($name in 'Get-PAOrder', 'Get-PACertificate', 'New-PACertificate', 'Submit-Renewal', 'Connect-IpPbx', 'Disconnect-IpPbx') {
         Remove-Item -Path "function:global:$name" -ErrorAction SilentlyContinue
     }
+    Remove-Variable -Name AdminFacade -Scope Global -ErrorAction SilentlyContinue
     Remove-Item Env:\SWYXAUTOSSL_HOME -ErrorAction SilentlyContinue
 }
 
@@ -535,5 +539,140 @@ Describe 'Test-SwyxAutoSslCloudflareToken' {
         $result = Test-SwyxAutoSslCloudflareToken -Token (New-TestSecureString 'tok') -Fqdn 'swyx01.example.com'
         $result.Valid | Should -BeFalse
         $result.Message | Should -Match '403'
+    }
+}
+
+Describe 'SwyxWare administrator rights for SYSTEM' {
+    BeforeEach {
+        Mock -ModuleName SwyxAutoSsl Write-RunLog { }
+        Mock -ModuleName SwyxAutoSsl Import-IpPbxModule { }
+        Mock -ModuleName SwyxAutoSsl Connect-IpPbx { }
+        Mock -ModuleName SwyxAutoSsl Disconnect-IpPbx { }
+
+        # Fake IpPbx AdminFacade backed by an in-memory admin list.
+        $script:AdminRows = New-Object System.Collections.ArrayList
+        $script:AddedAdmins = New-Object System.Collections.ArrayList
+        $script:AddTakesEffect = $true
+        $global:AdminFacade = New-Object psobject
+        $global:AdminFacade | Add-Member -MemberType ScriptMethod -Name GetAdminUsersView -Value { $script:AdminRows.ToArray() }
+        $global:AdminFacade | Add-Member -MemberType ScriptMethod -Name AddAdminUser -Value {
+            param($Identity, $ProfileName)
+            [void]$script:AddedAdmins.Add("$Identity|$ProfileName")
+            if ($script:AddTakesEffect) {
+                [void]$script:AdminRows.Add([pscustomobject]@{ AdminUserID = 42; WindowsIdentitiy = $Identity; SID = 'S-1-5-18'; AdminProfileID = 1 })
+            }
+            0
+        }
+        $global:AdminFacade | Add-Member -MemberType ScriptMethod -Name DeleteAdminUser -Value {
+            param($AdminUserID)
+            $row = $script:AdminRows | Where-Object { $_.AdminUserID -eq $AdminUserID }
+            if (-not $row) { return $false }
+            $script:AdminRows.Remove($row)
+            $true
+        }
+    }
+
+    It 'adds SYSTEM with the IpPbxAdministrator profile when it is missing' {
+        Invoke-InModule { Grant-SystemSwyxAdmin } | Should -BeTrue
+        $script:AddedAdmins.Count | Should -Be 1
+        $script:AddedAdmins[0] | Should -Match '\\SYSTEM\|IpPbxAdministrator$'
+        Should -Invoke -ModuleName SwyxAutoSsl Disconnect-IpPbx -Times 1 -Exactly
+    }
+
+    It 'leaves an existing SYSTEM entry alone' {
+        [void]$script:AdminRows.Add([pscustomobject]@{ AdminUserID = 7; WindowsIdentitiy = 'NT AUTHORITY\SYSTEM'; SID = 'S-1-5-18'; AdminProfileID = 1 })
+        Invoke-InModule { Grant-SystemSwyxAdmin } | Should -BeFalse
+        $script:AddedAdmins.Count | Should -Be 0
+    }
+
+    It 'fails, and still disconnects, when SwyxWare does not accept the entry' {
+        $script:AddTakesEffect = $false
+        { Invoke-InModule { Grant-SystemSwyxAdmin } } | Should -Throw '*did not accept*'
+        Should -Invoke -ModuleName SwyxAutoSsl Disconnect-IpPbx -Times 1 -Exactly
+    }
+
+    It 'removes the SYSTEM entry again' {
+        [void]$script:AdminRows.Add([pscustomobject]@{ AdminUserID = 42; WindowsIdentitiy = 'NT AUTHORITY\SYSTEM'; SID = 'S-1-5-18'; AdminProfileID = 1 })
+        [void]$script:AdminRows.Add([pscustomobject]@{ AdminUserID = 3; WindowsIdentitiy = 'EXAMPLE\admin'; SID = 'S-1-5-21-1-2-3-500'; AdminProfileID = 1 })
+        Invoke-InModule { Revoke-SystemSwyxAdmin }
+        @($script:AdminRows | ForEach-Object { $_.SID }) | Should -Be @('S-1-5-21-1-2-3-500')
+    }
+}
+
+Describe 'Register-RenewalTask with -Credential' {
+    It 'runs as the given account with highest privileges' {
+        Mock -ModuleName SwyxAutoSsl Write-RunLog { }
+        Mock -ModuleName SwyxAutoSsl Register-ScheduledTask { }
+        Mock -ModuleName SwyxAutoSsl Get-RenewalTask { $null }
+        $credential = New-Object System.Management.Automation.PSCredential('EXAMPLE\svc-swyx', (New-TestSecureString 'not-a-real-password'))
+        Invoke-InModule { Register-RenewalTask -Fqdn 'swyx01.example.com' -DailyAt '03:17' -Credential $args[0] } $credential
+        Should -Invoke -ModuleName SwyxAutoSsl Register-ScheduledTask -Times 1 -Exactly -ParameterFilter {
+            $User -eq 'EXAMPLE\svc-swyx' -and $Password -eq 'not-a-real-password' -and $RunLevel -eq 'Highest' -and -not $Principal
+        }
+    }
+}
+
+Describe 'Scst.Cli rights check' {
+    It 'explains how to fix a missing SwyxWare administrator right' {
+        Mock -ModuleName SwyxAutoSsl Invoke-ScstCli {
+            [pscustomobject]@{ ExitCode = 1; Output = '"configuration": "Windows and SwyxWare administrator rights are required to use this command in an elevated command prompt!"'; Error = '' }
+        }
+        { Invoke-InModule { Get-ScstConfiguration -CliPath 'C:\Swyx\Scst.Cli.exe' } } | Should -Throw '*Re-run Install-SwyxAutoSsl*'
+    }
+}
+
+Describe 'Install-SwyxAutoSsl task identity' {
+    BeforeEach {
+        New-TestHome | Out-Null
+        foreach ($command in 'Write-RunLog', 'Assert-Administrator', 'Initialize-DataDirectory', 'Register-EventSource',
+            'Install-PoshAcmeDependency', 'Install-ModuleFile', 'Set-SwyxAutoSslCloudflareToken', 'Revoke-SystemSwyxAdmin',
+            'Register-RenewalTask', 'Start-ScheduledTask', 'Get-SwyxAutoSslStatus') {
+            Mock -ModuleName SwyxAutoSsl $command { }
+        }
+        Mock -ModuleName SwyxAutoSsl Get-ScstCliPath { 'C:\Swyx\Scst.Cli.exe' }
+        Mock -ModuleName SwyxAutoSsl Get-ScstFqdn { 'swyx01.example.com' }
+        Mock -ModuleName SwyxAutoSsl Grant-SystemSwyxAdmin { $true }
+        Mock -ModuleName SwyxAutoSsl Get-RenewalTask { [pscustomobject]@{ State = 'Ready' } }
+        $script:InstallArgs = @{ Fqdn = 'swyx01.example.com'; ContactEmail = 'it@example.com' }
+        $script:SvcCredential = New-Object System.Management.Automation.PSCredential('EXAMPLE\svc-swyx', (New-TestSecureString 'not-a-real-password'))
+    }
+
+    It 'makes SYSTEM a SwyxWare administrator and runs the task as SYSTEM by default' {
+        Install-SwyxAutoSsl @script:InstallArgs
+        Should -Invoke -ModuleName SwyxAutoSsl Grant-SystemSwyxAdmin -Times 1 -Exactly
+        Should -Invoke -ModuleName SwyxAutoSsl Register-RenewalTask -Times 1 -Exactly -ParameterFilter { -not $Credential }
+        $config = Invoke-InModule { Get-Config }
+        $config.SystemSwyxAdminGranted | Should -BeTrue
+        $config.TaskAccount | Should -BeNullOrEmpty
+    }
+
+    It 'leaves SwyxWare administrators alone with -TaskCredential' {
+        Install-SwyxAutoSsl @script:InstallArgs -TaskCredential $script:SvcCredential
+        Should -Invoke -ModuleName SwyxAutoSsl Grant-SystemSwyxAdmin -Times 0 -Exactly
+        Should -Invoke -ModuleName SwyxAutoSsl Register-RenewalTask -Times 1 -Exactly -ParameterFilter { $Credential.UserName -eq 'EXAMPLE\svc-swyx' }
+        (Invoke-InModule { Get-Config }).TaskAccount | Should -Be 'EXAMPLE\svc-swyx'
+    }
+
+    It 'removes the SYSTEM rights it added when switching to -TaskCredential' {
+        Install-SwyxAutoSsl @script:InstallArgs
+        Install-SwyxAutoSsl @script:InstallArgs -TaskCredential $script:SvcCredential
+        Should -Invoke -ModuleName SwyxAutoSsl Revoke-SystemSwyxAdmin -Times 1 -Exactly
+        (Invoke-InModule { Get-Config }).SystemSwyxAdminGranted | Should -BeFalse
+    }
+
+    It 'keeps a task that runs as another account when re-run without a credential' {
+        Install-SwyxAutoSsl @script:InstallArgs -TaskCredential $script:SvcCredential
+        Install-SwyxAutoSsl @script:InstallArgs
+        Should -Invoke -ModuleName SwyxAutoSsl Register-RenewalTask -Times 1 -Exactly
+        Should -Invoke -ModuleName SwyxAutoSsl Grant-SystemSwyxAdmin -Times 0 -Exactly
+        (Invoke-InModule { Get-Config }).TaskAccount | Should -Be 'EXAMPLE\svc-swyx'
+    }
+
+    It 'switches back to SYSTEM with -RunAsSystem' {
+        Install-SwyxAutoSsl @script:InstallArgs -TaskCredential $script:SvcCredential
+        Install-SwyxAutoSsl @script:InstallArgs -RunAsSystem
+        Should -Invoke -ModuleName SwyxAutoSsl Grant-SystemSwyxAdmin -Times 1 -Exactly
+        Should -Invoke -ModuleName SwyxAutoSsl Register-RenewalTask -Times 1 -Exactly -ParameterFilter { -not $Credential }
+        (Invoke-InModule { Get-Config }).TaskAccount | Should -BeNullOrEmpty
     }
 }

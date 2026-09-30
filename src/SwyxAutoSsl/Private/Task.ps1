@@ -1,5 +1,6 @@
-# The unattended run is a daily scheduled task running as SYSTEM. Scst.Cli.exe accepts SYSTEM as a Windows and
-# SwyxWare administrator (verified on SwyxWare 14.26), so no dedicated account or stored password is needed.
+# The unattended run is a daily scheduled task, by default running as SYSTEM (which Install-SwyxAutoSsl registers as
+# a SwyxWare administrator), or as an account given with -TaskCredential. That account must be a local Administrator
+# and a SwyxWare administrator; its password is stored by Task Scheduler, not by SwyxAutoSsl.
 
 $script:TaskPath = '\SwyxAutoSsl\'
 $script:TaskName = 'Renew certificate'
@@ -13,7 +14,9 @@ function Register-RenewalTask {
         [Parameter(Mandatory)][string]$Fqdn,
         # HH:mm. Defaults to the existing task's time, or a random time between 01:00 and 05:59 so that
         # many servers do not all hit Let's Encrypt at once.
-        [string]$DailyAt
+        [string]$DailyAt,
+        # Run as this account instead of SYSTEM.
+        [pscredential]$Credential
     )
     if (-not $DailyAt) {
         $existing = Get-RenewalTask
@@ -34,12 +37,22 @@ function Register-RenewalTask {
         Description = "Renews the Let's Encrypt certificate for $Fqdn and installs it into SwyxWare. Managed by the SwyxAutoSsl PowerShell module."
         Action      = New-ScheduledTaskAction -Execute $powershell -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"$command`""
         Trigger     = New-ScheduledTaskTrigger -Daily -At $at
-        Principal   = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
         Settings    = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 1) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 30)
         Force       = $true
     }
+    if ($Credential) {
+        # Task Scheduler stores the password itself; it runs whether or not the account is logged on.
+        $taskParams.User = $Credential.UserName
+        $taskParams.Password = $Credential.GetNetworkCredential().Password
+        $taskParams.RunLevel = 'Highest'
+        $account = $Credential.UserName
+    }
+    else {
+        $taskParams.Principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+        $account = 'SYSTEM'
+    }
     Register-ScheduledTask @taskParams | Out-Null
-    Write-RunLog "Scheduled task '$($script:TaskPath)$($script:TaskName)' runs daily at $DailyAt as SYSTEM."
+    Write-RunLog "Scheduled task '$($script:TaskPath)$($script:TaskName)' runs daily at $DailyAt as $account."
 }
 
 function Unregister-RenewalTask {
