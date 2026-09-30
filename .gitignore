@@ -1,6 +1,3 @@
-# Discovery results (contain host names, IPs, thumbprints)
-discovery/output/
-
 # Packaged builds
 dist/
 

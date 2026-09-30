@@ -1,6 +1,10 @@
 # SwyxAutoSsl
 
+**A free tool by [FluxVision](https://fluxvision.co.uk), the call management platform for SwyxWare.**
+
 Unattended Let's Encrypt certificates for **SwyxWare 14** servers that use their own domain name.
+
+SwyxAutoSsl is free for anyone to use. Install it on as many SwyxWare servers as you need.
 
 The Swyx Connectivity Setup Tool (SCST) can only obtain Let's Encrypt certificates for SwyxON DNS names. With your own
 FQDN it expects you to supply a PFX by hand, and to do it again before every expiry. SwyxAutoSsl automates that:
@@ -194,10 +198,21 @@ Invoke-ScriptAnalyzer -Path .\src -Recurse
 
 The tests mock Posh-ACME, Cloudflare and `Scst.Cli.exe`, so they run on any Windows machine without SwyxWare.
 
-`discovery\` contains the read-only scripts used to work out how SCST installs certificates:
-`Invoke-SwyxScstDiscovery.ps1` collects SCST's command line, bindings, certificates and logs, and
-`Test-ScstRunAsSystem.ps1` checks that `Scst.Cli.exe` accepts SYSTEM.
+## About FluxVision
+
+SwyxAutoSsl is built and maintained by **[FluxVision](https://fluxvision.co.uk)**, the complete call management
+platform for SwyxWare PBX environments. FluxVision brings AI call transcription and summaries, call recording, quality
+assurance, call queues, live wallboards and reporting, and CRM integrations (HubSpot, Salesforce, Zoho) together in one
+web portal, alongside custom Swyx ECR scripting and development.
+
+We built SwyxAutoSsl to take manual certificate renewals off SwyxWare administrators' plates, and share it free of
+charge with anyone running SwyxWare on their own domain.
+
+- Website: [fluxvision.co.uk](https://fluxvision.co.uk)
+- Contact: [info@fluxvision.co.uk](mailto:info@fluxvision.co.uk)
+- Questions, bugs and feature requests for this tool: [GitHub Issues](https://github.com/FluxvisionLTD/Swyxware-AutomatedSSL/issues)
 
 ## License
 
-Not chosen yet.
+[MIT](LICENSE), copyright FluxVision Ltd. Free for anyone to use, copy, modify and distribute, including commercially;
+just keep the copyright notice and licence text with copies. Provided as is, without warranty.
