@@ -1,0 +1,14 @@
+# Discovery results (contain host names, IPs, thumbprints)
+discovery/output/
+
+# Packaged builds
+dist/
+
+# Certificates and secrets must never be committed
+*.pfx
+*.p12
+*.key
+*.pem
+*.cer
+*.secret
+.env
