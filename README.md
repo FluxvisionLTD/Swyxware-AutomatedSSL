@@ -2,7 +2,8 @@
 
 **A free tool by [FluxVision](https://fluxvision.co.uk), the call management platform for SwyxWare.**
 
-Unattended Let's Encrypt certificates for **SwyxWare 14** servers that use their own domain name.
+Unattended Let's Encrypt certificates for **SwyxWare 14 and later** (including SwyxWare 15) servers that use their own
+domain name.
 
 SwyxAutoSsl is free for anyone to use. Install it on as many SwyxWare servers as you need.
 
@@ -24,8 +25,9 @@ Let's Encrypt change breaks something. Both show up as event ID 1100 in the Wind
 
 ## Requirements
 
-- SwyxWare 14 with the Swyx Connectivity Setup Tool (`C:\Program Files\Swyx\SwyxWare\SCST\Scst.Cli.exe`).
-  Developed against SwyxWare 14.26; SCST must have been run once (the SwyxWare configuration wizard completed).
+- SwyxWare 14 or later, including SwyxWare 15, with the Swyx Connectivity Setup Tool
+  (`C:\Program Files\Swyx\SwyxWare\SCST\Scst.Cli.exe`). Developed against SwyxWare 14.26; SCST must have been run once
+  (the SwyxWare configuration wizard completed).
 - Windows PowerShell 5.1 (Windows Server 2016 or later) and administrator rights.
 - A public DNS name for the server (for example `swyx01.example.com`) in a zone hosted on Cloudflare, resolving to
   the server as SwyxWare clients and phones need it.

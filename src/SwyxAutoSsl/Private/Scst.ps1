@@ -1,4 +1,4 @@
-# Wrapper around the Swyx Connectivity Setup Tool command line (SwyxWare 14.x):
+# Wrapper around the Swyx Connectivity Setup Tool command line (SwyxWare 14 and later):
 #   Scst.Cli.exe configure manual --name <fqdn> --file <pfx>
 #   Scst.Cli.exe install certificate --certificate-file <pfx>
 #   Scst.Cli.exe show configuration | show certificate
@@ -19,7 +19,7 @@ function Get-ScstCliPath {
     foreach ($candidate in $candidates) {
         if (Test-Path -LiteralPath $candidate) { return $candidate }
     }
-    throw 'Scst.Cli.exe was not found. The Swyx Connectivity Setup Tool (SwyxWare 14) is required; set ScstCliPath in config.json if it is installed elsewhere.'
+    throw 'Scst.Cli.exe was not found. The Swyx Connectivity Setup Tool (SwyxWare 14 or later) is required; set ScstCliPath in config.json if it is installed elsewhere.'
 }
 
 function Invoke-ScstCli {

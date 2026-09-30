@@ -5,7 +5,7 @@
     Author               = 'FluxVision'
     CompanyName          = 'FluxVision (https://fluxvision.co.uk)'
     Copyright            = '(c) 2026 FluxVision Ltd. MIT License.'
-    Description          = "Free tool by FluxVision (https://fluxvision.co.uk). Unattended Let's Encrypt certificates for SwyxWare: Cloudflare DNS-01 validation via Posh-ACME, installed through the Swyx Connectivity Setup Tool CLI."
+    Description          = "Free tool by FluxVision (https://fluxvision.co.uk). Unattended Let's Encrypt certificates for SwyxWare 14 and later: Cloudflare DNS-01 validation via Posh-ACME, installed through the Swyx Connectivity Setup Tool CLI."
     PowerShellVersion    = '5.1'
     CompatiblePSEditions = @('Desktop', 'Core')
     FunctionsToExport    = @(
